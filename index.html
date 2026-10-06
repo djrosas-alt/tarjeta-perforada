@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarjeta Perforada</title>
+<style>
+  :root{
+    --bg:#fbf3f8; --ink:#5b4a6b; --muted:#9a88aa;
+    --card:#f6d9ea; --card-edge:#e8bcd6; --print:#b48fc6;
+    --hole:#fbf3f8; --hole-edge:#c9a7dc; --accent:#c79be0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+    font-family:"Courier New",ui-monospace,monospace;display:flex;flex-direction:column;
+    align-items:center;gap:20px;padding:32px 16px}
+  h1{margin:0;font-size:1.4rem;letter-spacing:.08em;color:var(--print)}
+  .entrada{width:min(900px,100%);display:flex;flex-direction:column;gap:6px}
+  label{font-size:.85rem;color:var(--muted)}
+  input{width:100%;padding:12px 14px;font:inherit;font-size:1rem;text-transform:uppercase;
+    border:2px solid var(--card-edge);border-radius:10px;background:#fff;color:var(--ink);outline:none}
+  input:focus{border-color:var(--accent)}
+  .contador{font-size:.8rem;color:var(--muted);text-align:right}
+  .marco{width:min(1100px,100%);overflow-x:auto}
+  svg{display:block;width:100%;min-width:760px;height:auto;filter:drop-shadow(0 6px 14px rgba(180,143,198,.25))}
+</style>
+</head>
+<body>
+<h1>TARJETA PERFORADA</h1>
+<div class="entrada">
+  <label for="t">Escribe tu texto (máx. 80 caracteres, código IBM 029)</label>
+  <input id="t" maxlength="80" value="HOLA MUNDO" autocomplete="off">
+  <div class="contador" id="c"></div>
+</div>
+<div class="marco"><svg id="card" viewBox="0 0 1000 440" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+<script>
+// Filas de la tarjeta: 12, 11, 0, 1..9
+const ROWS = ["12","11","0","1","2","3","4","5","6","7","8","9"];
+// Codificación IBM 029 (Hollerith)
+const CODE = {" ":[], "&":["12"], "-":["11"], "/":["0","1"],
+  ".":["12","3","8"], "<":["12","4","8"], "(":["12","5","8"], "+":["12","6","8"], "|":["12","7","8"],
+  "!":["11","2","8"], "$":["11","3","8"], "*":["11","4","8"], ")":["11","5","8"], ";":["11","6","8"], "¬":["11","7","8"],
+  ",":["0","3","8"], "%":["0","4","8"], "_":["0","5","8"], ">":["0","6","8"], "?":["0","7","8"],
+  ":":["2","8"], "#":["3","8"], "@":["4","8"], "'":["5","8"], "=":["6","8"], '"':["7","8"]};
+for (let d=0; d<=9; d++) CODE[String(d)] = [String(d)];
+"ABCDEFGHI".split("").forEach((ch,i)=>CODE[ch]=["12",String(i+1)]);
+"JKLMNOPQR".split("").forEach((ch,i)=>CODE[ch]=["11",String(i+1)]);
+"STUVWXYZ".split("").forEach((ch,i)=>CODE[ch]=["0",String(i+2)]);
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const svg = document.getElementById("card");
+const input = document.getElementById("t");
+const counter = document.getElementById("c");
+
+function normalize(s){
+  return s.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").slice(0,80);
+}
+
+function draw(){
+  const text = normalize(input.value);
+  counter.textContent = text.length + " / 80";
+  const W=1000,H=440, x0=46, colW=11.5, y0=62, rowH=30;
+  let s = `<path d="M24 0 H${W-10} Q${W} 0 ${W} 10 V${H-10} Q${W} ${H} ${W-10} ${H} H10 Q0 ${H} 0 ${H-10} V24 Z"
+            fill="${css('--card')}" stroke="${css('--card-edge')}" stroke-width="2"/>`;
+  // Texto impreso arriba
+  for (let c=0;c<80;c++){
+    const ch = text[c]; if(!ch) continue;
+    s += `<text x="${x0+c*colW}" y="24" font-size="11" text-anchor="middle" fill="${css('--ink')}" font-family="Courier New, monospace" font-weight="bold">${ch.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</text>`;
+  }
+  // Números impresos y perforaciones
+  for (let r=0;r<ROWS.length;r++){
+    const y = y0 + r*rowH;
+    for (let c=0;c<80;c++){
+      const x = x0 + c*colW;
+      const ch = text[c];
+      const holes = ch!==undefined ? (CODE[ch] || []) : [];
+      if (holes.includes(ROWS[r])){
+        s += `<rect x="${x-3.2}" y="${y-8}" width="6.4" height="14" rx="1.2" fill="${css('--hole')}" stroke="${css('--hole-edge')}" stroke-width="1"/>`;
+      } else if (r>=2){
+        s += `<text x="${x}" y="${y+4}" font-size="8.5" text-anchor="middle" fill="${css('--print')}" font-family="Courier New, monospace">${ROWS[r]}</text>`;
+      }
+    }
+    // Números de columna bajo las filas 0 y 9
+    if (ROWS[r]==="0" || ROWS[r]==="9"){
+      for (let c=0;c<80;c+=1){
+        if ((c+1)%5!==0 && c!==0) continue;
+        s += `<text x="${x0+c*colW}" y="${y+15}" font-size="5.5" text-anchor="middle" fill="${css('--muted')}" font-family="Courier New, monospace">${c+1}</text>`;
+      }
+    }
+  }
+  // Etiquetas de filas 12 y 11
+  s += `<text x="14" y="${y0+4}" font-size="8" fill="${css('--muted')}" font-family="Courier New, monospace">12</text>`;
+  s += `<text x="14" y="${y0+rowH+4}" font-size="8" fill="${css('--muted')}" font-family="Courier New, monospace">11</text>`;
+  svg.innerHTML = s;
+}
+input.addEventListener("input", draw);
+draw();
+</script>
+</body>
+</html>
